@@ -21,15 +21,22 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Dar permisos de ejecución a Gradlew
-        run: chmod +x gradlew
+      - name: Configurar Gradle
+        uses: gradle/actions/setup-gradle@v3
 
-      - name: Compilar APK Debug
-        run: ./gradlew assembleDebug --no-daemon
+      - name: Generar Gradle Wrapper
+        # Al ser código de AI Studio, generamos el ejecutable en el momento
+        run: gradle wrapper
+
+      - name: Dar permisos y compilar APK Debug
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
 
       - name: Subir APK como Artifact
         uses: actions/upload-artifact@v4
         with:
           name: CajaDiaria-debug-apk
-          path: app/build/outputs/apk/debug/*.apk
+          # Usamos ** para buscar el APK sin importar cómo AI Studio estructuró las carpetas
+          path: '**/build/outputs/apk/debug/*.apk'
           if-no-files-found: error
