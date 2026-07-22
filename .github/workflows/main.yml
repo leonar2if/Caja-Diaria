@@ -20,6 +20,10 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
+      - name: Generar debug.keystore
+        run: |
+          keytool -genkey -v -keystore debug.keystore -keyalias androiddebugkey -storepass android -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US" -noprompt
+
       - name: Configurar Gradle
         uses: gradle/actions/setup-gradle@v3
 
