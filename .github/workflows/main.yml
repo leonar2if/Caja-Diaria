@@ -23,14 +23,11 @@ jobs:
       - name: Configurar Gradle
         uses: gradle/actions/setup-gradle@v3
 
-      - name: Dar permisos a gradlew (necesario porque se subió desde web)
-        run: chmod +x gradlew
-
-      - name: Compilar APK usando bash (evita problema de permisos)
-        run: bash gradlew assembleDebug
+      - name: Compilar APK
+        run: gradle assembleDebug
 
       - name: Subir APK como artefacto
         uses: actions/upload-artifact@v4
         with:
-          name: L2WiFi-debug
-          path: app/build/outputs/apk/debug/app-
+          name: Caja-Diaria-debug
+          path: app/build/outputs/apk/debug/app-debug.apk
