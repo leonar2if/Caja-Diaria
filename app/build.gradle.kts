@@ -31,15 +31,6 @@ android {
       keyAlias = "upload"
       keyPassword = System.getenv("KEY_PASSWORD")
     }
-    create("debugConfig") {
-      val debugKeystorePath = file("${rootDir}/debug.keystore")
-      if (debugKeystorePath.exists()) {
-        storeFile = debugKeystorePath
-        storePassword = "android"
-        keyAlias = "androiddebugkey"
-        keyPassword = "android"
-      }
-    }
   }
 
   buildTypes {
@@ -50,9 +41,7 @@ android {
       signingConfig = signingConfigs.getByName("release")
     }
     debug { 
-      if (file("${rootDir}/debug.keystore").exists()) {
-        signingConfig = signingConfigs.getByName("debugConfig")
-      }
+      signingConfig = null
     }
   }
   compileOptions {
