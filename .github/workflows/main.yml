@@ -1,1 +1,36 @@
+name: Compilar APK 
 
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      - name: Configurar JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Configurar Gradle
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: Dar permisos a gradlew (necesario porque se subió desde web)
+        run: chmod +x gradlew
+
+      - name: Compilar APK usando bash (evita problema de permisos)
+        run: bash gradlew assembleDebug
+
+      - name: Subir APK como artefacto
+        uses: actions/upload-artifact@v4
+        with:
+          name: L2WiFi-debug
+          path: app/build/outputs/apk/debug/app-
