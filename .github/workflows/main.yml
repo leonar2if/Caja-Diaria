@@ -22,12 +22,15 @@ jobs:
 
       - name: Configurar Gradle
         uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: '8.7'
 
-      - name: Compilar APK sin firma
-        run: gradle assembleDebug -x validateSigningDebug
+      - name: Compilar APK Debug con opciones de estabilidad
+        run: gradle assembleDebug -x validateSigningDebug --stacktrace --info
 
       - name: Subir APK como artefacto
         uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: Caja-Diaria-debug
           path: app/build/outputs/apk/debug/app-debug.apk
