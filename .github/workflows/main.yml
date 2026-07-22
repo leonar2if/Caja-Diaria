@@ -23,9 +23,9 @@ jobs:
       - name: Configurar Gradle
         uses: gradle/actions/setup-gradle@v3
         with:
-          gradle-version: '8.7'
+          gradle-version: '9.3.1'
 
-      - name: Compilar APK Debug con opciones de estabilidad
+      - name: Compilar APK Debug sin firma
         run: gradle assembleDebug -x validateSigningDebug --stacktrace --info
 
       - name: Subir APK como artefacto
