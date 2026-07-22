@@ -1,0 +1,6 @@
+{
+  "name": "CajaDiaria",
+  "description": "App de contabilidad diaria para negocios con registro de ventas, comisión, catálogo y estadísticas.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
