@@ -25,8 +25,8 @@ jobs:
         with:
           gradle-version: '9.3.1'
 
-      - name: Compilar APK Debug sin firma
-        run: gradle assembleDebug -x validateSigningDebug --stacktrace --info
+      - name: Compilar APK Debug
+        run: gradle assembleDebug --stacktrace --info
 
       - name: Subir APK como artefacto
         uses: actions/upload-artifact@v4
