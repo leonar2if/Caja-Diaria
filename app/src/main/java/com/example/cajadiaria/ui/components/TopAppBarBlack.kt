@@ -28,7 +28,7 @@ fun TopAppBarBlack(
     title: String = "CajaDiaria",
     canNavigateBack: Boolean = false,
     onNavigateBack: () -> Unit = {},
-    onAddProductClick: () -> Unit = {},
+    onProductsClick: () -> Unit = {},
     onViewStatisticsClick: () -> Unit = {}
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
@@ -106,7 +106,7 @@ fun TopAppBarBlack(
                                 )
                                 Spacer(modifier = Modifier.width(12.dp))
                                 Text(
-                                    text = "Agregar Producto al Catálogo",
+                                    text = "Productos",
                                     color = Color.White,
                                     fontSize = 14.sp
                                 )
@@ -114,7 +114,7 @@ fun TopAppBarBlack(
                         },
                         onClick = {
                             menuExpanded = false
-                            onAddProductClick()
+                            onProductsClick()
                         },
                         modifier = Modifier.testTag("menu_item_add_product")
                     )

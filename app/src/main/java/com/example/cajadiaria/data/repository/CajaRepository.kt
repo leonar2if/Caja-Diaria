@@ -22,55 +22,66 @@ class CajaRepository(private val dao: CajaDao) {
         // App starts empty without default products
     }
 
-    suspend fun addNewProduct(name: String, price: Double): Long = withContext(Dispatchers.IO) {
+    suspend fun addNewProduct(name: String, price: Double, currency: String = "MXN"): Long = withContext(Dispatchers.IO) {
         val trimmed = name.trim()
         val existing = dao.getProductByName(trimmed)
         if (existing != null) {
             existing.id
         } else {
-            dao.insertProduct(ProductEntity(name = trimmed, price = price, salesCount = 0))
+            dao.insertProduct(ProductEntity(name = trimmed, price = price, salesCount = 0, currency = currency))
         }
     }
 
-    suspend fun startNewDay(commissionPercentage: Double): Long = withContext(Dispatchers.IO) {
+    suspend fun updateProduct(id: Long, name: String, price: Double, currency: String) = withContext(Dispatchers.IO) {
+        val existing = dao.getProductById(id) ?: return@withContext
+        dao.updateProduct(existing.copy(name = name.trim(), price = price, currency = currency))
+    }
+
+    suspend fun deleteProduct(id: Long) = withContext(Dispatchers.IO) {
+        dao.deleteProduct(id)
+    }
+
+    suspend fun startNewDay(commissionPercentage: Double, exchangeRate: Double = 0.0): Long = withContext(Dispatchers.IO) {
         val session = DailySessionEntity(
             commissionPercentage = commissionPercentage,
             startTime = System.currentTimeMillis(),
-            isClosed = false
+            isClosed = false,
+            exchangeRate = exchangeRate
         )
         dao.insertSession(session)
     }
 
+    /**
+     * Cada item de venta viaja como (producto, cantidad, pagarEnUsd).
+     * - Si el producto es MXN, pagarEnUsd se ignora (siempre MXN).
+     * - Si el producto es USD y pagarEnUsd = true -> se cobra en dólares tal cual (unitPrice = precio USD).
+     * - Si el producto es USD y pagarEnUsd = false -> se cobra "al cambio": unitPrice = precio USD * exchangeRate (MXN).
+     */
     suspend fun registerSale(
         sessionId: Long,
         paymentMethod: String,
-        items: List<Pair<ProductEntity, Int>>
+        items: List<Triple<ProductEntity, Int, Boolean>>,
+        exchangeRate: Double
     ) = withContext(Dispatchers.IO) {
         if (items.isEmpty()) return@withContext
 
-        val totalAmount = items.sumOf { it.first.price * it.second }
+        val saleItems = buildSaleItems(items, exchangeRate)
+        val totalAmount = saleItems.filter { it.currency == "MXN" }.sumOf { it.subtotal }
+        val totalAmountUsd = saleItems.filter { it.currency == "USD" }.sumOf { it.subtotal }
+
         val sale = SaleEntity(
             sessionId = sessionId,
             timestamp = System.currentTimeMillis(),
             paymentMethod = paymentMethod,
-            totalAmount = totalAmount
+            totalAmount = totalAmount,
+            totalAmountUsd = totalAmountUsd
         )
         val saleId = dao.insertSale(sale)
 
-        val saleItems = items.map { (product, qty) ->
-            SaleItemEntity(
-                saleId = saleId,
-                productId = product.id,
-                productName = product.name,
-                unitPrice = product.price,
-                quantity = qty,
-                subtotal = product.price * qty
-            )
-        }
-        dao.insertSaleItems(saleItems)
+        dao.insertSaleItems(saleItems.map { it.copy(saleId = saleId) })
 
         // Update product ranking points
-        for ((product, qty) in items) {
+        for ((product, qty, _) in items) {
             dao.updateProductSalesCount(product.id, qty)
         }
 
@@ -80,7 +91,8 @@ class CajaRepository(private val dao: CajaDao) {
     suspend fun editSale(
         saleId: Long,
         newPaymentMethod: String,
-        newItems: List<Pair<ProductEntity, Int>>
+        newItems: List<Triple<ProductEntity, Int, Boolean>>,
+        exchangeRate: Double
     ) = withContext(Dispatchers.IO) {
         val existingSale = dao.getSaleById(saleId) ?: return@withContext
         val oldItems = dao.getSaleItemsBySaleId(saleId)
@@ -93,31 +105,70 @@ class CajaRepository(private val dao: CajaDao) {
         // Delete old sale items
         dao.deleteSaleItems(saleId)
 
-        val totalAmount = newItems.sumOf { it.first.price * it.second }
+        val newSaleItems = buildSaleItems(newItems, exchangeRate)
+        val totalAmount = newSaleItems.filter { it.currency == "MXN" }.sumOf { it.subtotal }
+        val totalAmountUsd = newSaleItems.filter { it.currency == "USD" }.sumOf { it.subtotal }
+
         val updatedSale = existingSale.copy(
             paymentMethod = newPaymentMethod,
-            totalAmount = totalAmount
+            totalAmount = totalAmount,
+            totalAmountUsd = totalAmountUsd
         )
         dao.insertSale(updatedSale)
 
-        val newSaleItems = newItems.map { (product, qty) ->
-            SaleItemEntity(
-                saleId = saleId,
-                productId = product.id,
-                productName = product.name,
-                unitPrice = product.price,
-                quantity = qty,
-                subtotal = product.price * qty
-            )
-        }
-        dao.insertSaleItems(newSaleItems)
+        dao.insertSaleItems(newSaleItems.map { it.copy(saleId = saleId) })
 
         // Apply new ranking counts
-        for ((product, qty) in newItems) {
+        for ((product, qty, _) in newItems) {
             dao.updateProductSalesCount(product.id, qty)
         }
 
         recalculateSessionTotals(existingSale.sessionId)
+    }
+
+    private fun buildSaleItems(
+        items: List<Triple<ProductEntity, Int, Boolean>>,
+        exchangeRate: Double
+    ): List<SaleItemEntity> {
+        return items.map { (product, qty, payInUsd) ->
+            val isUsdProduct = product.currency.equals("USD", ignoreCase = true)
+            if (isUsdProduct && payInUsd) {
+                SaleItemEntity(
+                    saleId = 0,
+                    productId = product.id,
+                    productName = product.name,
+                    unitPrice = product.price,
+                    quantity = qty,
+                    subtotal = product.price * qty,
+                    currency = "USD",
+                    exchangeRateApplied = null
+                )
+            } else if (isUsdProduct) {
+                // "Al cambio": se multiplica por el valor del dólar del día
+                val mxnUnitPrice = product.price * exchangeRate
+                SaleItemEntity(
+                    saleId = 0,
+                    productId = product.id,
+                    productName = product.name,
+                    unitPrice = mxnUnitPrice,
+                    quantity = qty,
+                    subtotal = mxnUnitPrice * qty,
+                    currency = "MXN",
+                    exchangeRateApplied = exchangeRate
+                )
+            } else {
+                SaleItemEntity(
+                    saleId = 0,
+                    productId = product.id,
+                    productName = product.name,
+                    unitPrice = product.price,
+                    quantity = qty,
+                    subtotal = product.price * qty,
+                    currency = "MXN",
+                    exchangeRateApplied = null
+                )
+            }
+        }
     }
 
     suspend fun deleteSale(saleId: Long) = withContext(Dispatchers.IO) {
@@ -139,6 +190,7 @@ class CajaRepository(private val dao: CajaDao) {
         val allSales = dao.getSalesForSessionSync(sessionId)
         var totalCash = 0.0
         var totalTransfer = 0.0
+        var totalUsd = 0.0
 
         for (swi in allSales) {
             if (swi.sale.paymentMethod.equals("EFECTIVO", ignoreCase = true)) {
@@ -146,6 +198,7 @@ class CajaRepository(private val dao: CajaDao) {
             } else {
                 totalTransfer += swi.sale.totalAmount
             }
+            totalUsd += swi.sale.totalAmountUsd
         }
 
         val totalSales = totalCash + totalTransfer
@@ -161,7 +214,8 @@ class CajaRepository(private val dao: CajaDao) {
                     totalTransfer = totalTransfer,
                     totalSales = totalSales,
                     commissionAmount = commAmt,
-                    netProfit = net
+                    netProfit = net,
+                    totalUsd = totalUsd
                 )
             )
         }
@@ -177,6 +231,7 @@ class CajaRepository(private val dao: CajaDao) {
         val itemSummaryMap = mutableMapOf<String, Pair<Int, Double>>() // productName -> (quantity, total)
         var totalCash = 0.0
         var totalTransfer = 0.0
+        var totalUsd = 0.0
 
         for (s in sales) {
             if (s.sale.paymentMethod.equals("EFECTIVO", ignoreCase = true)) {
@@ -184,6 +239,7 @@ class CajaRepository(private val dao: CajaDao) {
             } else {
                 totalTransfer += s.sale.totalAmount
             }
+            totalUsd += s.sale.totalAmountUsd
 
             for (item in s.items) {
                 val current = itemSummaryMap[item.productName] ?: Pair(0, 0.0)
@@ -217,7 +273,8 @@ class CajaRepository(private val dao: CajaDao) {
             totalSales = totalSales,
             commissionAmount = commissionAmt,
             netProfit = netProfit,
-            closedSummaryJson = jsonArray.toString()
+            closedSummaryJson = jsonArray.toString(),
+            totalUsd = totalUsd
         )
 
         dao.updateSession(closedSession)

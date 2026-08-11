@@ -100,6 +100,13 @@ fun ReceiptTicketDialog(
         session.totalTransfer
     }
 
+    val totalUsdCollected = if (isClosingActiveDay) {
+        liveSales.sumOf { it.sale.totalAmountUsd }
+    } else {
+        session.totalUsd
+    }
+    val usdFormat = remember { NumberFormat.getCurrencyInstance(Locale.US) }
+
     val totalVendido = totalCash + totalTransfer
     val commissionAmount = totalVendido * (session.commissionPercentage / 100.0)
     val netProfit = totalVendido - commissionAmount
@@ -233,6 +240,15 @@ fun ReceiptTicketDialog(
                     fontSize = 11.sp,
                     color = Slate900
                 )
+
+                if (totalUsdCollected > 0) {
+                    Text(
+                        text = "  - Dólares (US$):             ${usdFormat.format(totalUsdCollected)}",
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 11.sp,
+                        color = Amber600
+                    )
+                }
 
                 Text(
                     text = "----------------------------------------",

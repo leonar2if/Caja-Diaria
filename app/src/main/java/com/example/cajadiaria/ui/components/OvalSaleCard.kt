@@ -48,7 +48,14 @@ fun OvalSaleCard(
     }
 
     val currencyFormat = remember { NumberFormat.getCurrencyInstance(Locale("es", "MX")).apply { maximumFractionDigits = 0 } }
-    val totalFormatted = currencyFormat.format(saleWithItems.sale.totalAmount)
+    val usdFormatHeader = remember { NumberFormat.getCurrencyInstance(Locale.US) }
+    val totalFormatted = buildString {
+        append(currencyFormat.format(saleWithItems.sale.totalAmount))
+        if (saleWithItems.sale.totalAmountUsd > 0) {
+            append(" + ")
+            append(usdFormatHeader.format(saleWithItems.sale.totalAmountUsd))
+        }
+    }
 
     val isCash = saleWithItems.sale.paymentMethod.equals("EFECTIVO", ignoreCase = true)
     val badgeBg = if (isCash) Emerald50 else Indigo50
@@ -203,8 +210,9 @@ fun OvalSaleCard(
                     ) {
                         Column(modifier = Modifier.padding(12.dp)) {
                             saleWithItems.items.forEach { item ->
-                                val unitPriceFormatted = currencyFormat.format(item.unitPrice)
-                                val subtotalFormatted = currencyFormat.format(item.subtotal)
+                                val isUsdItem = item.currency.equals("USD", ignoreCase = true)
+                                val usdFormat = remember { NumberFormat.getCurrencyInstance(Locale.US) }
+                                val subtotalFormatted = if (isUsdItem) usdFormat.format(item.subtotal) else currencyFormat.format(item.subtotal)
 
                                 Row(
                                     modifier = Modifier
@@ -214,7 +222,7 @@ fun OvalSaleCard(
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Text(
-                                        text = "${item.quantity}x ${item.productName}",
+                                        text = "${item.quantity}x ${item.productName}" + if (isUsdItem) " (US$)" else "",
                                         fontSize = 13.sp,
                                         fontWeight = FontWeight.Medium,
                                         color = Slate700

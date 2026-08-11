@@ -8,5 +8,7 @@ data class ProductEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val name: String,
     val price: Double,
-    val salesCount: Int = 0
+    val salesCount: Int = 0,
+    // "MXN" (peso, precio normal) o "USD" (dólares)
+    val currency: String = "MXN"
 )

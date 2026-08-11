@@ -9,10 +9,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AddCircleOutline
+import androidx.compose.material.icons.filled.AttachMoney
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.ShoppingBag
+import androidx.compose.material.icons.filled.SyncAlt
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -30,13 +32,21 @@ import com.example.ui.theme.*
 import java.text.NumberFormat
 import java.util.Locale
 
+/** Línea del carrito: producto, cantidad, y si un producto en USD se cobra directo en dólares. */
+private data class CartLine(
+    val product: ProductEntity,
+    val qty: Int,
+    val payInUsd: Boolean = false
+)
+
 @Composable
 fun RegisterSaleDialog(
     productsByRanking: List<ProductEntity>,
     editingSale: SaleWithItems? = null,
+    exchangeRate: Double = 0.0,
     onDismiss: () -> Unit,
     onCreateNewProductRequested: (suggestedName: String) -> Unit,
-    onConfirmSale: (paymentMethod: String, items: List<Pair<ProductEntity, Int>>) -> Unit
+    onConfirmSale: (paymentMethod: String, items: List<Triple<ProductEntity, Int, Boolean>>) -> Unit
 ) {
     // Payment method state
     var selectedPaymentMethod by remember {
@@ -46,22 +56,27 @@ fun RegisterSaleDialog(
     // Search query
     var searchQuery by remember { mutableStateOf("") }
 
-    // Selected cart items: Map<ProductId, Pair<ProductEntity, Quantity>>
+    // Selected cart items: Map<ProductId, CartLine>
     val cartState = remember {
-        mutableStateMapOf<Long, Pair<ProductEntity, Int>>().apply {
+        mutableStateMapOf<Long, CartLine>().apply {
             editingSale?.items?.forEach { item ->
                 val prod = ProductEntity(
                     id = item.productId,
                     name = item.productName,
                     price = item.unitPrice,
-                    salesCount = 0
+                    salesCount = 0,
+                    currency = item.currency
                 )
-                put(item.productId, Pair(prod, item.quantity))
+                put(item.productId, CartLine(prod, item.quantity, payInUsd = item.currency.equals("USD", ignoreCase = true)))
             }
         }
     }
 
+    // Producto USD pendiente de elegir "en dólares" vs "al cambio"
+    var usdChoiceProduct by remember { mutableStateOf<ProductEntity?>(null) }
+
     val currencyFormat = remember { NumberFormat.getCurrencyInstance(Locale("es", "MX")).apply { maximumFractionDigits = 0 } }
+    val usdFormat = remember { NumberFormat.getCurrencyInstance(Locale.US) }
 
     // Filter products keeping ranking
     val filteredProducts = remember(searchQuery, productsByRanking) {
@@ -72,7 +87,34 @@ fun RegisterSaleDialog(
         }
     }
 
-    val totalSale = cartState.values.sumOf { it.first.price * it.second }
+    fun effectivePrice(line: CartLine): Double {
+        val isUsdProduct = line.product.currency.equals("USD", ignoreCase = true)
+        return when {
+            isUsdProduct && line.payInUsd -> line.product.price
+            isUsdProduct -> line.product.price * exchangeRate
+            else -> line.product.price
+        }
+    }
+
+    fun isEffectivelyUsd(line: CartLine): Boolean {
+        return line.product.currency.equals("USD", ignoreCase = true) && line.payInUsd
+    }
+
+    val totalMxn = cartState.values.filterNot { isEffectivelyUsd(it) }.sumOf { effectivePrice(it) * it.qty }
+    val totalUsd = cartState.values.filter { isEffectivelyUsd(it) }.sumOf { effectivePrice(it) * it.qty }
+
+    fun addOrIncrementProduct(product: ProductEntity) {
+        val existing = cartState[product.id]
+        if (existing != null) {
+            cartState[product.id] = existing.copy(qty = existing.qty + 1)
+            return
+        }
+        if (product.currency.equals("USD", ignoreCase = true)) {
+            usdChoiceProduct = product
+        } else {
+            cartState[product.id] = CartLine(product, 1, payInUsd = false)
+        }
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -220,15 +262,13 @@ fun RegisterSaleDialog(
 
                     // Catalog items ordered by ranking
                     items(filteredProducts, key = { it.id }) { product ->
-                        val currentQty = cartState[product.id]?.second ?: 0
+                        val currentQty = cartState[product.id]?.qty ?: 0
+                        val isUsd = product.currency.equals("USD", ignoreCase = true)
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clip(RoundedCornerShape(8.dp))
-                                .clickable {
-                                    val newQty = currentQty + 1
-                                    cartState[product.id] = Pair(product, newQty)
-                                }
+                                .clickable { addOrIncrementProduct(product) }
                                 .padding(vertical = 10.dp, horizontal = 8.dp),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
@@ -240,11 +280,25 @@ fun RegisterSaleDialog(
                                     fontWeight = FontWeight.SemiBold,
                                     color = Slate900
                                 )
-                                Text(
-                                    text = currencyFormat.format(product.price),
-                                    fontSize = 12.sp,
-                                    color = Slate700
-                                )
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        text = if (isUsd) usdFormat.format(product.price) else currencyFormat.format(product.price),
+                                        fontSize = 12.sp,
+                                        color = Slate700
+                                    )
+                                    if (isUsd) {
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Surface(color = Amber600.copy(alpha = 0.12f), shape = RoundedCornerShape(6.dp)) {
+                                            Text(
+                                                text = "USD",
+                                                fontSize = 9.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = Amber600,
+                                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
+                                            )
+                                        }
+                                    }
+                                }
                             }
 
                             if (currentQty > 0) {
@@ -320,7 +374,13 @@ fun RegisterSaleDialog(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Column(modifier = Modifier.padding(8.dp)) {
-                            cartState.values.forEach { (product, qty) ->
+                            cartState.values.forEach { line ->
+                                val product = line.product
+                                val qty = line.qty
+                                val lineIsUsd = isEffectivelyUsd(line)
+                                val lineTotal = effectivePrice(line) * qty
+                                val lineTotalFormatted = if (lineIsUsd) usdFormat.format(lineTotal) else currencyFormat.format(lineTotal)
+
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
@@ -328,19 +388,27 @@ fun RegisterSaleDialog(
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Text(
-                                        text = product.name,
-                                        fontSize = 13.sp,
-                                        fontWeight = FontWeight.Medium,
-                                        color = Slate900,
-                                        modifier = Modifier.weight(1f)
-                                    )
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = product.name,
+                                            fontSize = 13.sp,
+                                            fontWeight = FontWeight.Medium,
+                                            color = Slate900
+                                        )
+                                        if (product.currency.equals("USD", ignoreCase = true)) {
+                                            Text(
+                                                text = if (lineIsUsd) "Pagado en dólares" else "Pagado al cambio (${currencyFormat.format(exchangeRate)}/US$)",
+                                                fontSize = 10.sp,
+                                                color = Amber600
+                                            )
+                                        }
+                                    }
 
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         IconButton(
                                             onClick = {
                                                 if (qty > 1) {
-                                                    cartState[product.id] = Pair(product, qty - 1)
+                                                    cartState[product.id] = line.copy(qty = qty - 1)
                                                 } else {
                                                     cartState.remove(product.id)
                                                 }
@@ -359,7 +427,7 @@ fun RegisterSaleDialog(
                                         )
 
                                         IconButton(
-                                            onClick = { cartState[product.id] = Pair(product, qty + 1) },
+                                            onClick = { cartState[product.id] = line.copy(qty = qty + 1) },
                                             modifier = Modifier.size(26.dp)
                                         ) {
                                             Icon(imageVector = Icons.Default.Add, contentDescription = "Más", tint = Slate700, modifier = Modifier.size(16.dp))
@@ -368,7 +436,7 @@ fun RegisterSaleDialog(
                                         Spacer(modifier = Modifier.width(8.dp))
 
                                         Text(
-                                            text = currencyFormat.format(product.price * qty),
+                                            text = lineTotalFormatted,
                                             fontSize = 13.sp,
                                             fontWeight = FontWeight.Bold,
                                             color = Slate900
@@ -385,7 +453,7 @@ fun RegisterSaleDialog(
             Button(
                 onClick = {
                     if (cartState.isEmpty()) return@Button
-                    val itemsList = cartState.values.toList()
+                    val itemsList = cartState.values.map { Triple(it.product, it.qty, it.payInUsd) }
                     onConfirmSale(selectedPaymentMethod, itemsList)
                 },
                 enabled = cartState.isNotEmpty(),
@@ -396,8 +464,12 @@ fun RegisterSaleDialog(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(imageVector = Icons.Default.ShoppingBag, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(6.dp))
+                    val totalLabel = buildString {
+                        append("Confirmar ${currencyFormat.format(totalMxn)}")
+                        if (totalUsd > 0) append(" + ${usdFormat.format(totalUsd)}")
+                    }
                     Text(
-                        text = "Confirmar ${currencyFormat.format(totalSale)}",
+                        text = totalLabel,
                         color = Color.White,
                         fontWeight = FontWeight.Bold
                     )
@@ -412,5 +484,77 @@ fun RegisterSaleDialog(
         shape = RoundedCornerShape(24.dp),
         containerColor = Color.White
     )
-}
 
+    // Diálogo: cómo cobrar un producto en USD
+    usdChoiceProduct?.let { product ->
+        val alCambioPrice = product.price * exchangeRate
+        val canUseAlCambio = exchangeRate > 0.0
+        AlertDialog(
+            onDismissRequest = { usdChoiceProduct = null },
+            title = {
+                Text("¿Cómo se paga \"${product.name}\"?", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Slate900)
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Surface(
+                        onClick = {
+                            cartState[product.id] = CartLine(product, 1, payInUsd = true)
+                            usdChoiceProduct = null
+                        },
+                        color = Amber600.copy(alpha = 0.10f),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth().testTag("usd_choice_dollars")
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(imageVector = Icons.Default.AttachMoney, contentDescription = null, tint = Amber600)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Column {
+                                Text("Pagar en Dólares", fontWeight = FontWeight.Bold, color = Slate900, fontSize = 14.sp)
+                                Text(usdFormat.format(product.price), color = Slate700, fontSize = 13.sp)
+                            }
+                        }
+                    }
+
+                    Surface(
+                        onClick = {
+                            if (canUseAlCambio) {
+                                cartState[product.id] = CartLine(product, 1, payInUsd = false)
+                                usdChoiceProduct = null
+                            }
+                        },
+                        color = if (canUseAlCambio) Indigo50 else Slate100,
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth().testTag("usd_choice_al_cambio")
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(imageVector = Icons.Default.SyncAlt, contentDescription = null, tint = if (canUseAlCambio) Indigo600 else Slate400)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Column {
+                                Text("Pagar al Cambio", fontWeight = FontWeight.Bold, color = Slate900, fontSize = 14.sp)
+                                Text(
+                                    text = if (canUseAlCambio) currencyFormat.format(alCambioPrice) else "Configura el valor del dólar al iniciar el día",
+                                    color = if (canUseAlCambio) Slate700 else Red600,
+                                    fontSize = 13.sp
+                                )
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { usdChoiceProduct = null }) {
+                    Text("Cancelar", color = Slate700)
+                }
+            },
+            shape = RoundedCornerShape(24.dp),
+            containerColor = Color.White
+        )
+    }
+}

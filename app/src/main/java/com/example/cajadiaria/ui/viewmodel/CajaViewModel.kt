@@ -13,6 +13,7 @@ import kotlinx.coroutines.launch
 sealed class Screen {
     object Home : Screen()
     object Statistics : Screen()
+    object Products : Screen()
 }
 
 class CajaViewModel(application: Application) : AndroidViewModel(application) {
@@ -54,8 +55,14 @@ class CajaViewModel(application: Application) : AndroidViewModel(application) {
     private val _commissionInput = MutableStateFlow("6")
     val commissionInput: StateFlow<String> = _commissionInput.asStateFlow()
 
+    private val _exchangeRateInput = MutableStateFlow("")
+    val exchangeRateInput: StateFlow<String> = _exchangeRateInput.asStateFlow()
+
     private val _isAddProductDialogOpen = MutableStateFlow(false)
     val isAddProductDialogOpen: StateFlow<Boolean> = _isAddProductDialogOpen.asStateFlow()
+
+    private val _editingProduct = MutableStateFlow<ProductEntity?>(null)
+    val editingProduct: StateFlow<ProductEntity?> = _editingProduct.asStateFlow()
 
     private val _isRegisterSaleDialogOpen = MutableStateFlow(false)
     val isRegisterSaleDialogOpen: StateFlow<Boolean> = _isRegisterSaleDialogOpen.asStateFlow()
@@ -73,26 +80,53 @@ class CajaViewModel(application: Application) : AndroidViewModel(application) {
         _commissionInput.value = valStr
     }
 
+    fun updateExchangeRateInput(valStr: String) {
+        _exchangeRateInput.value = valStr
+    }
+
     fun startDay() {
         val comm = _commissionInput.value.toDoubleOrNull() ?: 6.0
+        val rate = _exchangeRateInput.value.toDoubleOrNull() ?: 0.0
         viewModelScope.launch {
-            repository.startNewDay(comm)
+            repository.startNewDay(comm, rate)
         }
     }
 
     fun openAddProductDialog() {
+        _editingProduct.value = null
+        _isAddProductDialogOpen.value = true
+    }
+
+    fun openEditProductDialog(product: ProductEntity) {
+        _editingProduct.value = product
         _isAddProductDialogOpen.value = true
     }
 
     fun closeAddProductDialog() {
         _isAddProductDialogOpen.value = false
+        _editingProduct.value = null
     }
 
-    fun addNewProduct(name: String, price: Double) {
+    fun addNewProduct(name: String, price: Double, currency: String) {
         viewModelScope.launch {
-            repository.addNewProduct(name, price)
+            val editing = _editingProduct.value
+            if (editing != null) {
+                repository.updateProduct(editing.id, name, price, currency)
+            } else {
+                repository.addNewProduct(name, price, currency)
+            }
             closeAddProductDialog()
         }
+    }
+
+    fun deleteProduct(product: ProductEntity) {
+        viewModelScope.launch {
+            repository.deleteProduct(product.id)
+        }
+    }
+
+    fun navigateToProducts() {
+        _currentScreen.value = Screen.Products
     }
 
     fun openRegisterSaleDialog(editing: SaleWithItems? = null) {
@@ -107,15 +141,16 @@ class CajaViewModel(application: Application) : AndroidViewModel(application) {
 
     fun saveSale(
         paymentMethod: String,
-        items: List<Pair<ProductEntity, Int>>
+        items: List<Triple<ProductEntity, Int, Boolean>>
     ) {
         val currentSession = activeSession.value ?: return
         val editing = _editingSale.value
+        val rate = currentSession.exchangeRate
         viewModelScope.launch {
             if (editing != null) {
-                repository.editSale(editing.sale.id, paymentMethod, items)
+                repository.editSale(editing.sale.id, paymentMethod, items, rate)
             } else {
-                repository.registerSale(currentSession.id, paymentMethod, items)
+                repository.registerSale(currentSession.id, paymentMethod, items, rate)
             }
             closeRegisterSaleDialog()
         }

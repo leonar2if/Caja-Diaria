@@ -10,6 +10,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.AttachMoney
 import androidx.compose.material.icons.filled.Percent
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.PointOfSale
@@ -42,6 +43,8 @@ fun HomeScreen(
     activeSales: List<SaleWithItems>,
     commissionInput: String,
     onCommissionInputChange: (String) -> Unit,
+    exchangeRateInput: String,
+    onExchangeRateInputChange: (String) -> Unit,
     onStartDayClick: () -> Unit,
     onAddSaleClick: () -> Unit,
     onEditSaleClick: (SaleWithItems) -> Unit,
@@ -155,6 +158,76 @@ fun HomeScreen(
                             modifier = Modifier
                                 .width(180.dp)
                                 .testTag("commission_percent_input")
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Exchange Rate Card (valor del dólar del día)
+                Surface(
+                    shape = RoundedCornerShape(24.dp),
+                    color = Color.White,
+                    shadowElevation = 1.dp,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .border(1.dp, Slate200, RoundedCornerShape(24.dp))
+                ) {
+                    Column(
+                        modifier = Modifier.padding(20.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.AttachMoney,
+                                contentDescription = null,
+                                tint = Amber600,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Valor del Dólar Hoy",
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Slate900
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(14.dp))
+
+                        OutlinedTextField(
+                            value = exchangeRateInput,
+                            onValueChange = { onExchangeRateInputChange(it) },
+                            label = { Text("Pesos por US$1") },
+                            placeholder = { Text("18.50", color = Slate400) },
+                            prefix = { Text("$", color = Slate900, fontWeight = FontWeight.Bold) },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            singleLine = true,
+                            shape = RoundedCornerShape(12.dp),
+                            textStyle = TextStyle(color = Slate900, fontSize = 16.sp, fontWeight = FontWeight.Bold),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedTextColor = Slate900,
+                                unfocusedTextColor = Slate900,
+                                focusedBorderColor = Amber600,
+                                unfocusedBorderColor = Slate400,
+                                focusedLabelColor = Amber600,
+                                unfocusedLabelColor = Slate700
+                            ),
+                            modifier = Modifier
+                                .width(180.dp)
+                                .testTag("exchange_rate_input")
+                        )
+
+                        Spacer(modifier = Modifier.height(6.dp))
+
+                        Text(
+                            text = "Se usará para vender productos en dólares \"al cambio\".",
+                            fontSize = 11.sp,
+                            color = Slate500,
+                            textAlign = TextAlign.Center
                         )
                     }
                 }

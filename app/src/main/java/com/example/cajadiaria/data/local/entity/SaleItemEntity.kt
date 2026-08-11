@@ -11,5 +11,9 @@ data class SaleItemEntity(
     val productName: String,
     val unitPrice: Double,
     val quantity: Int,
-    val subtotal: Double
+    val subtotal: Double,
+    // Moneda en la que efectivamente se cobró este renglón: "MXN" o "USD"
+    val currency: String = "MXN",
+    // Si el producto era en USD y se cobró "al cambio", aquí queda el valor del dólar usado
+    val exchangeRateApplied: Double? = null
 )

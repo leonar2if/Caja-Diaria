@@ -15,5 +15,9 @@ data class DailySessionEntity(
     val totalSales: Double = 0.0,
     val commissionAmount: Double = 0.0,
     val netProfit: Double = 0.0,
-    val closedSummaryJson: String? = null
+    val closedSummaryJson: String? = null,
+    // Valor del dólar fijado al iniciar el día (pesos por 1 USD)
+    val exchangeRate: Double = 0.0,
+    // Total cobrado en dólares "en efectivo dólares" (ventas pagadas directamente en USD)
+    val totalUsd: Double = 0.0
 )

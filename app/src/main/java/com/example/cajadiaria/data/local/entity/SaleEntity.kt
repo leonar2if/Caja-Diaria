@@ -9,5 +9,6 @@ data class SaleEntity(
     val sessionId: Long,
     val timestamp: Long = System.currentTimeMillis(),
     val paymentMethod: String, // "EFECTIVO" or "TRANSFERENCIA"
-    val totalAmount: Double
+    val totalAmount: Double, // Total en MXN (incluye productos "al cambio")
+    val totalAmountUsd: Double = 0.0 // Total pagado directamente en USD
 )

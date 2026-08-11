@@ -23,6 +23,15 @@ interface CajaDao {
     @Query("SELECT * FROM products WHERE name = :name LIMIT 1")
     suspend fun getProductByName(name: String): ProductEntity?
 
+    @Query("SELECT * FROM products WHERE id = :productId LIMIT 1")
+    suspend fun getProductById(productId: Long): ProductEntity?
+
+    @Update
+    suspend fun updateProduct(product: ProductEntity)
+
+    @Query("DELETE FROM products WHERE id = :productId")
+    suspend fun deleteProduct(productId: Long)
+
     // --- Daily Sessions ---
     @Query("SELECT * FROM daily_sessions WHERE isClosed = 0 ORDER BY startTime DESC LIMIT 1")
     fun getActiveSession(): Flow<DailySessionEntity?>

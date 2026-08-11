@@ -54,9 +54,11 @@ fun StatisticsScreen(
     val totalEfectivo = remember(last30Sessions) { last30Sessions.sumOf { it.totalCash } }
     val totalTransferencia = remember(last30Sessions) { last30Sessions.sumOf { it.totalTransfer } }
     val totalComisiones = remember(last30Sessions) { last30Sessions.sumOf { it.commissionAmount } }
+    val totalUsdCollected = remember(last30Sessions) { last30Sessions.sumOf { it.totalUsd } }
     val promedioDiario = remember(last30Sessions) {
         if (last30Sessions.isNotEmpty()) totalIngresosBrutos / last30Sessions.size else 0.0
     }
+    val usdFormat = remember { NumberFormat.getCurrencyInstance(Locale.US) }
 
     // Filter tickets
     val filteredClosedSessions = remember(closedSessions, searchQuery) {
@@ -181,6 +183,23 @@ fun StatisticsScreen(
                             Text("Comisiones", fontSize = 11.sp, color = Slate700)
                             Text(
                                 text = currencyFormat.format(totalComisiones),
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Amber600
+                            )
+                        }
+                    }
+
+                    if (totalUsdCollected > 0) {
+                        HorizontalDivider(
+                            color = Slate100,
+                            modifier = Modifier.padding(vertical = 12.dp)
+                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("Cobrado en Dólares:", fontSize = 12.sp, color = Slate700)
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = usdFormat.format(totalUsdCollected),
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Amber600
@@ -357,7 +376,8 @@ fun StatisticsScreen(
                                     color = Slate900
                                 )
                                 Text(
-                                    text = "Efec: ${currencyFormat.format(session.totalCash)} | Transf: ${currencyFormat.format(session.totalTransfer)}",
+                                    text = "Efec: ${currencyFormat.format(session.totalCash)} | Transf: ${currencyFormat.format(session.totalTransfer)}" +
+                                        if (session.totalUsd > 0) " | ${usdFormat.format(session.totalUsd)}" else "",
                                     fontSize = 12.sp,
                                     color = Slate700
                                 )

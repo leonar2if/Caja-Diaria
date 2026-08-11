@@ -14,7 +14,7 @@ import com.example.cajadiaria.data.local.entity.*
         SaleEntity::class,
         SaleItemEntity::class
     ],
-    version = 1,
+    version = 2,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {

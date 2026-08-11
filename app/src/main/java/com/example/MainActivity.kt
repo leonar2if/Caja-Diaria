@@ -16,6 +16,7 @@ import com.example.cajadiaria.ui.components.ReceiptTicketDialog
 import com.example.cajadiaria.ui.components.RegisterSaleDialog
 import com.example.cajadiaria.ui.components.TopAppBarBlack
 import com.example.cajadiaria.ui.screens.HomeScreen
+import com.example.cajadiaria.ui.screens.ProductsScreen
 import com.example.cajadiaria.ui.screens.StatisticsScreen
 import com.example.cajadiaria.ui.viewmodel.CajaViewModel
 import com.example.cajadiaria.ui.viewmodel.Screen
@@ -35,8 +36,10 @@ class MainActivity : ComponentActivity() {
                 val products by viewModel.products.collectAsStateWithLifecycle()
                 val closedSessions by viewModel.closedSessions.collectAsStateWithLifecycle()
                 val commissionInput by viewModel.commissionInput.collectAsStateWithLifecycle()
+                val exchangeRateInput by viewModel.exchangeRateInput.collectAsStateWithLifecycle()
 
                 val isAddProductDialogOpen by viewModel.isAddProductDialogOpen.collectAsStateWithLifecycle()
+                val editingProduct by viewModel.editingProduct.collectAsStateWithLifecycle()
                 val isRegisterSaleDialogOpen by viewModel.isRegisterSaleDialogOpen.collectAsStateWithLifecycle()
                 val editingSale by viewModel.editingSale.collectAsStateWithLifecycle()
 
@@ -48,10 +51,14 @@ class MainActivity : ComponentActivity() {
                 Scaffold(
                     topBar = {
                         TopAppBarBlack(
-                            title = if (currentScreen is Screen.Statistics) "Estadísticas" else "CajaDiaria",
-                            canNavigateBack = currentScreen is Screen.Statistics,
+                            title = when (currentScreen) {
+                                is Screen.Statistics -> "Estadísticas"
+                                is Screen.Products -> "Productos"
+                                else -> "CajaDiaria"
+                            },
+                            canNavigateBack = currentScreen is Screen.Statistics || currentScreen is Screen.Products,
                             onNavigateBack = { viewModel.navigateToHome() },
-                            onAddProductClick = { viewModel.openAddProductDialog() },
+                            onProductsClick = { viewModel.navigateToProducts() },
                             onViewStatisticsClick = { viewModel.navigateToStatistics() }
                         )
                     },
@@ -64,6 +71,8 @@ class MainActivity : ComponentActivity() {
                                 activeSales = activeSales,
                                 commissionInput = commissionInput,
                                 onCommissionInputChange = { viewModel.updateCommissionInput(it) },
+                                exchangeRateInput = exchangeRateInput,
+                                onExchangeRateInputChange = { viewModel.updateExchangeRateInput(it) },
                                 onStartDayClick = { viewModel.startDay() },
                                 onAddSaleClick = { viewModel.openRegisterSaleDialog(null) },
                                 onEditSaleClick = { sale -> viewModel.openRegisterSaleDialog(sale) },
@@ -81,21 +90,34 @@ class MainActivity : ComponentActivity() {
                                 modifier = Modifier.padding(innerPadding)
                             )
                         }
+
+                        is Screen.Products -> {
+                            ProductsScreen(
+                                products = products,
+                                onAddProductClick = { viewModel.openAddProductDialog() },
+                                onEditProductClick = { product -> viewModel.openEditProductDialog(product) },
+                                onDeleteProductClick = { product -> viewModel.deleteProduct(product) },
+                                modifier = Modifier.padding(innerPadding)
+                            )
+                        }
                     }
 
                     // --- DIALOGS ---
 
-                    // 1. Add Product Dialog
+                    // 1. Add / Edit Product Dialog
                     if (isAddProductDialogOpen) {
                         AddProductDialog(
-                            initialName = newProductSuggestedName,
+                            initialName = editingProduct?.name ?: newProductSuggestedName,
+                            initialPrice = editingProduct?.price,
+                            initialCurrency = editingProduct?.currency ?: "MXN",
+                            isEditing = editingProduct != null,
                             onDismiss = {
                                 newProductSuggestedName = ""
                                 viewModel.closeAddProductDialog()
                             },
-                            onConfirm = { name, price ->
+                            onConfirm = { name, price, currency ->
                                 newProductSuggestedName = ""
-                                viewModel.addNewProduct(name, price)
+                                viewModel.addNewProduct(name, price, currency)
                             }
                         )
                     }
@@ -105,6 +127,7 @@ class MainActivity : ComponentActivity() {
                         RegisterSaleDialog(
                             productsByRanking = products,
                             editingSale = editingSale,
+                            exchangeRate = activeSession?.exchangeRate ?: 0.0,
                             onDismiss = { viewModel.closeRegisterSaleDialog() },
                             onCreateNewProductRequested = { suggestedName ->
                                 newProductSuggestedName = suggestedName
